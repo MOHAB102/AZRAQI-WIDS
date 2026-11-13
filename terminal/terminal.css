@@ -1,0 +1,54 @@
+.term-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  direction: ltr;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.term-tab.active {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  background: rgba(0, 229, 255, .07);
+}
+.term-tab.dead {
+  opacity: .55;
+}
+.term-tab.dead .term-tab-label {
+  text-decoration: line-through;
+}
+.term-tab-close {
+  font-style: normal;
+}
+.term-tab-close:hover {
+  color: var(--red);
+}
+.term-instance {
+  position: absolute;
+  inset: 0;
+  padding: 8px;
+  display: none;
+}
+.term-instance.active {
+  display: block;
+}
+.term-host .xterm {
+  height: 100%;
+}
+.term-host .xterm-viewport {
+  border-radius: 10px;
+}
+.term-host .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+.term-host .xterm-viewport::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--cyan), var(--violet));
+  border-radius: 8px;
+}

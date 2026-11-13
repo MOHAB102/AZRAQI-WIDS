@@ -1,0 +1,47 @@
+{
+  "name": "azraqi-wids",
+  "productName": "AZRAQI WIDS",
+  "version": "1.0.0",
+  "description": "مركز عمليات أمن لاسلكي دفاعي — Wireless Defense SOC",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "author": "M AL-AZRAQI",
+  "license": "MIT",
+  "dependencies": {
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-unicode11": "^0.8.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.0",
+    "@electron/rebuild": "^3.6.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.azraqi.wids",
+    "productName": "AZRAQI WIDS",
+    "directories": { "output": "dist" },
+    "files": [
+      "main.js", "preload.js", "index.html", "style.css",
+      "renderer.js", "globe.js", "radar.js", "audio.js",
+      "terminal/**/*", "backend/**/*", "assets/**/*",
+      "requirements.txt", "package.json"
+    ],
+    "win": { "target": ["nsis", "portable"] },
+    "linux": { "target": ["AppImage", "deb"], "category": "Utility" },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

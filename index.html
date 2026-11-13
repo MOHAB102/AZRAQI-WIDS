@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data:; font-src 'self' file: data:; connect-src 'self' file:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>AZRAQI WIDS — Wireless Defense SOC</title>
+  <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="terminal/terminal.css">
+</head>
+<body data-theme="cyber" data-motion="full">
+  <div id="boot">
+    <div class="boot-grid"></div>
+    <div class="boot-scan"></div>
+    <div class="boot-core">
+      <img class="boot-logo" src="assets/icons/icon.svg" alt="AZRAQI">
+      <h1>AZRAQI WIDS</h1>
+      <p>WIRELESS DEFENSE · SECURITY OPERATIONS</p>
+      <div id="bootLog" class="boot-log"></div>
+      <div class="boot-progress"><i id="bootBar"></i></div>
+      <div class="boot-actions">
+        <button id="bootSkip" class="btn ghost" type="button">تخطي المقدمة</button>
+        <span id="audioHint" class="audio-hint hidden">🔊 اضغط في أي مكان لتفعيل الصوت</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand">
+        <img class="logo" src="assets/icons/icon.svg" alt="">
+        <div>
+          <h1>AZRAQI WIDS</h1>
+          <p data-i18n="appSubtitle">مركز عمليات الأمن اللاسلكي</p>
+        </div>
+      </div>
+      <div class="chips">
+        <span class="chip lab">🧪 <span data-i18n="labMode">بيئة دفاعية مصرّح بها</span></span>
+        <span class="chip"><span id="sourceDot" class="dot off"></span> <span data-i18n="kismet">Kismet</span>: <bdi id="sourceLabel">غير متصل</bdi></span>
+        <span class="chip"><span class="dot on"></span> <bdi id="adapterChip">wlan0</bdi></span>
+        <span class="chip"><b data-i18n="networks">الشبكات</b> <bdi id="netCountChip">0</bdi></span>
+        <span class="chip"><span id="backendDot" class="dot off"></span> <bdi id="backendLabel">المحرك متوقف</bdi></span>
+      </div>
+      <div class="top-actions">
+        <button id="soundBtn" class="icon-btn" type="button" title="كتم / تشغيل الصوت">🔊</button>
+        <button id="settingsBtn" class="icon-btn" type="button" title="الإعدادات">⚙</button>
+        <button id="fullscreenBtn" class="icon-btn" type="button" title="ملء الشاشة">⛶</button>
+        <span class="sep"></span>
+        <button id="winMin" class="icon-btn" type="button" title="تصغير">—</button>
+        <button id="winMax" class="icon-btn" type="button" title="تكبير">▢</button>
+        <button id="winClose" class="icon-btn danger" type="button" title="إغلاق">✕</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <nav class="sidebar">
+        <button class="nav-btn active" data-page="dashboard" type="button">
+          <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>
+          <span data-i18n="navDashboard">لوحة القيادة</span>
+        </button>
+        <button class="nav-btn" data-page="networks" type="button">
+          <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 00-9 9h2a7 7 0 0114 0h2a9 9 0 00-9-9zm0 4a5 5 0 00-5 5h2a3 3 0 016 0h2a5 5 0 00-5-5zm0 4a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+          <span data-i18n="navNetworks">الشبكات المحيطة</span>
+        </button>
+        <button class="nav-btn" data-page="devices" type="button">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v10H4zM2 16h20v2H2zM9 20h6v2H9z"/></svg>
+          <span data-i18n="navDevices">أجهزة الشبكة</span>
+        </button>
+        <button class="nav-btn" data-page="security" type="button">
+          <svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/></svg>
+          <span data-i18n="navSecurity">مركز الأمان</span>
+          <span id="navAlertBadge" class="nav-badge hidden">0</span>
+        </button>
+        <button class="nav-btn" data-page="links" type="button">
+          <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.7 1.7M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.7-1.7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span data-i18n="navLinks">فاحص الروابط</span>
+        </button>
+        <button class="nav-btn" data-page="reports" type="button">
+          <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M8 13h8v2H8zM8 17h8v2H8z"/></svg>
+          <span data-i18n="navReports">التقارير</span>
+        </button>
+        <button class="nav-btn" data-page="settings" type="button">
+          <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm9 4l-2.1 1.6.3 2.6-2.5.9-1.2 2.3-2.6-.5L11 21l-1.9-2.1-2.6.5-1.2-2.3-2.5-.9.3-2.6L1 12l2.1-1.6-.3-2.6 2.5-.9L6.5 4.6l2.6.5L11 3l1.9 2.1 2.6-.5 1.2 2.3 2.5.9-.3 2.6z"/></svg>
+          <span data-i18n="navSettings">الإعدادات</span>
+        </button>
+        <div class="side-foot"><span class="tech">v1.0.0</span></div>
+      </nav>
+
+      <main class="content">
+        <section id="page-dashboard" class="page active">
+          <div class="dash">
+            <div class="col">
+              <div class="panel reveal" style="--i:0">
+                <div class="panel-head">
+                  <h2 data-i18n="globeTitle">🌍 الاتصال العالمي</h2>
+                  <span class="status"><span id="globeStatusDot" class="dot on"></span> <span data-i18n="connected">متصل</span></span>
+                </div>
+                <div class="globe-wrap">
+                  <canvas id="globeCanvas" class="globe-canvas"></canvas>
+                  <span class="globe-tag" data-i18n="globeTag">كرة أرضية ثلاثية الأبعاد · أقواس اتصالات فعلية</span>
+                </div>
+              </div>
+              <div class="panel reveal" style="--i:1">
+                <div class="panel-head"><h2 data-i18n="summaryTitle">📊 ملخص الرصد</h2></div>
+                <div class="stat-grid">
+                  <div class="stat g"><small data-i18n="statGreen">شبكات طبيعية</small><b id="statGreen">0</b></div>
+                  <div class="stat y"><small data-i18n="statYellow">نشاط مشبوه</small><b id="statYellow">0</b></div>
+                  <div class="stat r"><small data-i18n="statRed">تهديد محتمل</small><b id="statRed">0</b></div>
+                  <div class="stat u"><small data-i18n="statUnknown">بيانات غير كافية</small><b id="statUnknown">0</b></div>
+                </div>
+                <div class="legend">
+                  <div><span class="ldot g"></span><span data-i18n="legendGreen">أخضر: لا مؤشرات مشبوهة ضمن الملتقط</span></div>
+                  <div><span class="ldot y"></span><span data-i18n="legendYellow">أصفر: نشاط مشبوه يستحق التحقيق</span></div>
+                  <div><span class="ldot r"></span><span data-i18n="legendRed">أحمر: تهديد محتمل بأدلة</span></div>
+                  <div><span class="ldot u"></span><span data-i18n="legendUnknown">رمادي: بيانات غير كافية</span></div>
+                </div>
+              </div>
+              <div class="panel reveal" style="--i:2">
+                <div class="panel-head"><h2 data-i18n="defenseTitle">🛡️ الدفاع والتخفيف</h2></div>
+                <div id="defenseList" class="defense"></div>
+              </div>
+            </div>
+
+            <div class="col col-center">
+              <div class="panel radar-panel reveal" style="--i:1">
+                <div class="panel-head">
+                  <h2 data-i18n="radarTitle">📡 رادار الشبكات المحيطة</h2>
+                  <span class="status"><span id="radarStatusDot" class="dot off"></span> <bdi id="radarStatus">بانتظار المصدر</bdi></span>
+                </div>
+                <div class="radar-wrap">
+                  <canvas id="radarCanvas" class="radar-canvas"></canvas>
+                  <span class="radar-hint" data-i18n="radarHint">القرب من المركز = قوة RSSI وليس مسافة حقيقية · اضغط على نقطة لعرض التفاصيل</span>
+                </div>
+                <div class="net-mini">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>SSID</th>
+                        <th>BSSID</th>
+                        <th>CH</th>
+                        <th>RSSI</th>
+                        <th data-i18n="thSecurity">الحماية</th>
+                        <th data-i18n="thStatus">الحالة</th>
+                        <th data-i18n="thConfidence">الثقة</th>
+                      </tr>
+                    </thead>
+                    <tbody id="netMiniBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="col">
+              <div class="panel reveal" style="--i:0">
+                <div class="panel-head">
+                  <h2 data-i18n="controlTitle">🎛️ لوحة التحكم المباشرة</h2>
+                  <span class="pill u" data-i18n="live">حي</span>
+                </div>
+                <div class="lab-controls">
+                  <div class="ctrl"><label><span data-i18n="ctlInterval">فترة تحديث الرصد</span><b id="ctlIntervalVal">5s</b></label><input id="ctlInterval" type="range" min="2" max="30" step="1" value="5"></div>
+                  <div class="ctrl"><label><span data-i18n="ctlSens">حساسية الكشف</span><b id="ctlSensVal">5</b></label><input id="ctlSens" type="range" min="1" max="10" step="1" value="5"></div>
+                  <div class="ctrl"><label><span data-i18n="ctlGlow">شدة التوهج</span><b id="ctlGlowVal">70%</b></label><input id="ctlGlow" type="range" min="0" max="100" step="1" value="70"></div>
+                  <div class="ctrl"><label><span data-i18n="ctlGlobe">سرعة دوران الكرة</span><b id="ctlGlobeVal">1.0×</b></label><input id="ctlGlobe" type="range" min="0" max="3" step="0.1" value="1"></div>
+                  <div class="ctrl"><label><span data-i18n="ctlRadarSpeed">سرعة مسح الرادار</span><b id="ctlRadarSpeedVal">1.0×</b></label><input id="ctlRadarSpeed" type="range" min="0.2" max="3" step="0.1" value="1"></div>
+                  <div class="ctrl"><label><span data-i18n="ctlParticles">كثافة الجزيئات</span><b id="ctlParticlesVal">40</b></label><input id="ctlParticles" type="range" min="0" max="120" step="1" value="40"></div>
+                  <div class="ctrl"><label data-i18n="ctlTheme">المظهر</label><select id="ctlTheme" class="select"><option value="cyber">Cyber Command</option><option value="military">Military Tactical</option><option value="midnight">Midnight Blue</option><option value="violet">Violet Pulse</option></select></div>
+                  <div class="ctrl"><label data-i18n="ctlMotion">مستوى الحركة</label><select id="ctlMotion" class="select"><option value="full" data-i18n="motionFull">كامل</option><option value="reduced" data-i18n="motionReduced">مخفف</option><option value="off" data-i18n="motionOff">إيقاف</option></select></div>
+                  <div class="btn-row">
+                    <button id="btnScanDevices" class="btn sm" type="button" data-i18n="btnScanDevices">فحص الأجهزة</button>
+                    <button id="btnAnalyzeFrames" class="btn sm warn" type="button" data-i18n="btnAnalyzeFrames">تحليل الإطارات</button>
+                    <button id="btnWifiSource" class="btn sm" type="button" data-i18n="btnWifiSource">معلومات المحول</button>
+                    <button id="btnResetView" class="btn sm ghost" type="button" data-i18n="btnResetView">إعادة ضبط العرض</button>
+                    <button id="btnExportSnapshot" class="btn sm primary" type="button" data-i18n="btnExportSnapshot">تصدير لقطة</button>
+                  </div>
+                </div>
+              </div>
+              <div class="panel reveal" style="--i:1">
+                <div class="panel-head">
+                  <h2 data-i18n="feedTitle">🔔 آخر الأحداث</h2>
+                  <button id="clearFeed" class="btn sm ghost" type="button" data-i18n="clearFeed">مسح</button>
+                </div>
+                <div id="liveFeed" class="feed"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="page-networks" class="page">
+          <div class="panel page-panel">
+            <div class="panel-head">
+              <h2 data-i18n="networksTitle">الشبكات المحيطة</h2>
+              <span class="count"><bdi id="netCount">0</bdi> <span data-i18n="netCountUnit">شبكة</span></span>
+            </div>
+            <div class="toolbar">
+              <input id="netSearch" class="input" type="text" data-i18n-ph="netSearchPh" placeholder="ابحث بـ SSID أو BSSID...">
+              <div class="filters" id="netFilters">
+                <button class="chip-btn active" data-f="all" type="button" data-i18n="filterAll">الكل</button>
+                <button class="chip-btn" data-f="green" type="button" data-i18n="filterGreen">أخضر</button>
+                <button class="chip-btn" data-f="yellow" type="button" data-i18n="filterYellow">أصفر</button>
+                <button class="chip-btn" data-f="red" type="button" data-i18n="filterRed">أحمر</button>
+                <button class="chip-btn" data-f="unknown" type="button" data-i18n="filterUnknown">رمادي</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th data-sort="ssid">SSID</th>
+                    <th data-sort="bssid">BSSID</th>
+                    <th data-sort="channel">Channel</th>
+                    <th data-sort="frequency">Frequency</th>
+                    <th data-sort="rssi">RSSI</th>
+                    <th data-sort="security" data-i18n="thSecurity">Security</th>
+                    <th data-i18n="thEncryption">Encryption</th>
+                    <th data-i18n="thVendor">Vendor</th>
+                    <th data-i18n="thFirst">أول رصد</th>
+                    <th data-i18n="thLast">آخر رصد</th>
+                    <th data-sort="status" data-i18n="thStatus">الحالة</th>
+                    <th data-sort="confidence" data-i18n="thConfidence">الثقة</th>
+                    <th data-i18n="thEvidence">الأدلة</th>
+                  </tr>
+                </thead>
+                <tbody id="netBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="page-devices" class="page">
+          <div class="panel page-panel">
+            <div class="panel-head">
+              <h2 data-i18n="devicesTitle">أجهزة الشبكة — فحص مستمر</h2>
+              <span class="count"><bdi id="devCount">0</bdi> <span data-i18n="devCountUnit">جهاز</span></span>
+            </div>
+            <div class="toolbar">
+              <select id="devInterface" class="select" style="max-width:220px"></select>
+              <input id="devSubnet" class="input" type="text" placeholder="192.168.1.0/24" style="max-width:180px">
+              <input id="devSearch" class="input" type="text" data-i18n-ph="devSearchPh" placeholder="ابحث بالاسم أو IP أو MAC...">
+              <label class="check"><input id="devAuto" type="checkbox" checked><span data-i18n="devAuto">فحص مستمر</span></label>
+              <button id="devRefresh" class="btn" type="button" data-i18n="devRefresh">فحص الآن</button>
+            </div>
+            <div id="devNote" class="disclaimer"></div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th data-i18n="thDevStatus">الحالة</th>
+                    <th data-i18n="thDevName">اسم الجهاز</th>
+                    <th>IP</th>
+                    <th>MAC</th>
+                    <th data-i18n="thDevVendor">Vendor</th>
+                    <th data-i18n="thDevFirst">أول رصد</th>
+                    <th data-i18n="thDevLast">آخر رصد</th>
+                    <th data-i18n="thDevTrusted">موثوق</th>
+                    <th data-i18n="thDevAction">تفاصيل</th>
+                  </tr>
+                </thead>
+                <tbody id="devBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="page-security" class="page">
+          <div class="panel page-panel">
+            <div class="panel-head">
+              <h2 data-i18n="securityTitle">مركز الأمان</h2>
+              <span class="count"><bdi id="secCount">0</bdi> <span data-i18n="secCountUnit">حدث</span></span>
+            </div>
+            <div class="disclaimer" data-i18n="secDisclaimer">تُبنى التصنيفات على أدلة حقيقية من Kismet وTShark. لا يُصنّف أي شبكة كمخترقة بدون دليل، ولا ينفذ التطبيق أي هجوم.</div>
+            <div class="toolbar">
+              <div class="filters" id="secFilters">
+                <button class="chip-btn active" data-level="all" type="button" data-i18n="filterAll">الكل</button>
+                <button class="chip-btn" data-level="info" type="button" data-i18n="levelInfo">معلومات</button>
+                <button class="chip-btn" data-level="warning" type="button" data-i18n="levelWarning">تحذير</button>
+                <button class="chip-btn" data-level="critical" type="button" data-i18n="levelCritical">حرج</button>
+                <button class="chip-btn" data-level="success" type="button" data-i18n="levelSuccess">نجاح</button>
+              </div>
+              <button id="secClear" class="btn ghost" type="button" data-i18n="secClear">مسح الأحداث</button>
+            </div>
+            <div id="secList" class="events"></div>
+          </div>
+        </section>
+
+        <section id="page-links" class="page">
+          <div class="panel page-panel">
+            <div class="panel-head"><h2 data-i18n="linksTitle">فاحص الروابط</h2></div>
+            <div class="toolbar">
+              <input id="linkInput" class="input" type="text" value="http://secure-update-account-login.tk/verify.php">
+              <button id="linkCheck" class="btn primary" type="button" data-i18n="linkCheck">🔍 فحص الرابط</button>
+            </div>
+            <div class="link-grid">
+              <div class="link-result">
+                <div class="verdict" id="linkVerdict"></div>
+                <div class="criteria" id="linkCriteria"></div>
+              </div>
+              <div>
+                <div class="disclaimer" data-i18n="linkDisclaimer">تحليل إرشادي يعتمد على بنية الرابط فقط، ولا يفتح الرابط أو يتصل بالإنترنت. ليس حكمًا نهائيًا.</div>
+                <div class="btn-row" style="margin-top:10px">
+                  <button class="btn sm" data-link="https://www.ust.edu.ye/login" type="button" data-i18n="sampleSafe">رابط جامعة آمن</button>
+                  <button class="btn sm warn" data-link="http://192.168.1.99/verify-account" type="button" data-i18n="sampleIp">رابط IP مشبوه</button>
+                  <button class="btn sm danger" data-link="http://secure-update-account-login.tk/verify.php" type="button" data-i18n="samplePhish">رابط تصيد تجريبي</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="page-reports" class="page">
+          <div class="panel page-panel">
+            <div class="panel-head"><h2 data-i18n="reportsTitle">التقارير</h2></div>
+            <div class="rep-grid">
+              <div class="rep-col">
+                <h3 class="sub-title" data-i18n="repSections">أقسام التقرير</h3>
+                <label class="check"><input type="checkbox" name="repSec" value="networks" checked><span data-i18n="repNetworks">الشبكات المحيطة</span></label>
+                <label class="check"><input type="checkbox" name="repSec" value="devices" checked><span data-i18n="repDevices">أجهزة الشبكة</span></label>
+                <label class="check"><input type="checkbox" name="repSec" value="events" checked><span data-i18n="repEvents">الأحداث والأدلة</span></label>
+                <label class="check"><input type="checkbox" name="repSec" value="summary" checked><span data-i18n="repSummary">الملخص</span></label>
+              </div>
+              <div class="rep-col">
+                <h3 class="sub-title" data-i18n="repFormat">صيغة التصدير</h3>
+                <select id="repFormat" class="select" style="max-width:200px"><option value="json">JSON</option><option value="csv">CSV</option><option value="txt">TXT</option></select>
+                <button id="repExport" class="btn primary" type="button" data-i18n="repExport">تصدير التقرير</button>
+                <div class="count"><span data-i18n="repLast">آخر تصدير</span>: <bdi id="repStatus" data-i18n="repNotYet">لم يتم بعد</bdi></div>
+              </div>
+            </div>
+            <div class="warning-box" data-i18n="repWarn">⚠ قد يحتوي التقرير على معلومات حساسة مثل IP وMAC واسم الجهاز. شاركه بحذر.</div>
+          </div>
+        </section>
+
+        <section id="page-settings" class="page">
+          <div class="panel page-panel">
+            <div class="panel-head"><h2 data-i18n="settingsTitle">الإعدادات</h2></div>
+            <div class="settings-grid">
+              <div class="set-group">
+                <h3 class="sub-title" data-i18n="setAppearance">المظهر والحركة</h3>
+                <div class="set-row"><label data-i18n="setTheme">المظهر</label><select id="setTheme" class="select" style="max-width:180px"><option value="cyber">Cyber Command</option><option value="military">Military Tactical</option><option value="midnight">Midnight Blue</option><option value="violet">Violet Pulse</option></select></div>
+                <div class="set-row"><label data-i18n="setMotion">مستوى الحركة</label><select id="setMotion" class="select" style="max-width:180px"><option value="full" data-i18n="motionFull">كامل</option><option value="reduced" data-i18n="motionReduced">مخفف</option><option value="off" data-i18n="motionOff">إيقاف</option></select></div>
+                <div class="set-row"><label data-i18n="setLanguage">اللغة</label><select id="setLanguage" class="select" style="max-width:180px"><option value="ar">العربية</option><option value="en">English</option></select></div>
+              </div>
+              <div class="set-group">
+                <h3 class="sub-title" data-i18n="setSound">الصوت</h3>
+                <div class="set-row"><label data-i18n="setSoundOn">تشغيل المؤثرات</label><label class="switch"><input id="setSound" type="checkbox" checked><span class="slider"></span></label></div>
+                <div class="set-row"><label data-i18n="setVolume">مستوى الصوت</label><div class="range"><input id="setVolume" type="range" min="0" max="100" value="60"><bdi id="setVolumeVal">60%</bdi></div></div>
+                <div class="set-row"><label data-i18n="setTyping">صوت الكتابة</label><label class="switch"><input id="setTyping" type="checkbox"><span class="slider"></span></label></div>
+                <div class="set-row"><label data-i18n="setTestSound">تجربة الصوت</label><button id="setTestSound" class="btn sm" type="button">▶</button></div>
+              </div>
+              <div class="set-group">
+                <h3 class="sub-title" data-i18n="setEngine">محرك الرصد</h3>
+                <div class="set-row"><label>Kismet URL</label><input id="setKismetUrl" class="input" type="text" style="max-width:220px"></div>
+                <div class="set-row"><label>Kismet API Key</label><input id="setKismetApiKey" class="input" type="password" style="max-width:220px"></div>
+                <div class="set-row"><label data-i18n="setScanInterval">فترة تحديث الرصد</label><select id="setScanInterval" class="select" style="max-width:180px"><option value="2">2s</option><option value="5">5s</option><option value="10">10s</option><option value="15">15s</option><option value="30">30s</option></select></div>
+                <div class="set-row"><label data-i18n="setSensitivity">حساسية الكشف</label><input id="setSensitivity" type="range" min="1" max="10" value="5" style="width:150px"></div>
+                <div class="set-row"><label data-i18n="setShell">Shell الافتراضية</label><select id="setShell" class="select" style="max-width:180px"><option value="default">تلقائي</option><option value="bash">Bash</option><option value="zsh">Zsh</option><option value="powershell">PowerShell</option><option value="cmd">CMD</option></select></div>
+                <div class="set-row"><label data-i18n="setFullscreen">ملء الشاشة</label><label class="switch"><input id="setFullscreen" type="checkbox"><span class="slider"></span></label></div>
+              </div>
+              <div class="set-group">
+                <h3 class="sub-title" data-i18n="setMaintenance">الصيانة</h3>
+                <div class="set-row"><label data-i18n="engineStatus">حالة المحرك</label><span class="chip"><span id="backendDot2" class="dot off"></span> <bdi id="backendLabel2">غير متصل</bdi></span></div>
+                <div class="set-row"><label data-i18n="setRestart">إعادة تشغيل المحرك</label><button id="btnRestartBackend" class="btn sm" type="button" data-i18n="setRestart">إعادة تشغيل</button></div>
+                <div class="set-row"><label data-i18n="setReset">إعادة ضبط الإعدادات</label><button id="btnResetSettings" class="btn sm danger" type="button" data-i18n="setReset">إعادة ضبط</button></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="term-dock">
+      <div class="term-head">
+        <span class="status"><span id="termStatusDot" class="dot off"></span> <bdi id="termStatusLabel">الطرفية</bdi></span>
+        <div id="termTabs" class="term-tabs"></div>
+        <select id="termShell" class="select" style="width:auto;padding:4px 8px;font-size:11px"><option value="default">تلقائي</option><option value="bash">Bash</option><option value="zsh">Zsh</option><option value="powershell">PowerShell</option><option value="cmd">CMD</option></select>
+        <button id="termNew" class="btn sm" type="button" data-i18n="termNew">جلسة جديدة</button>
+        <button id="termClear" class="btn sm ghost" type="button" data-i18n="termClear">مسح</button>
+        <button id="termCopy" class="btn sm ghost" type="button" title="نسخ">⧉</button>
+        <button id="termPaste" class="btn sm ghost" type="button" title="لصق">📋</button>
+        <button id="termClose" class="btn sm danger" type="button" title="إغلاق الجلسة">✕</button>
+      </div>
+      <div id="termHost" class="term-host"></div>
+    </div>
+
+    <footer class="statusbar">
+      <div class="ticker"><span class="key" data-i18n="activity">النشاط</span><canvas id="activityCanvas" class="mini"></canvas></div>
+      <div class="ticker"><span class="key" data-i18n="latest">آخر حدث</span><bdi id="tickerText" data-i18n="noEvents">لا توجد أحداث</bdi></div>
+      <div class="ticker" style="flex:0"><span class="key" data-i18n="alerts">التنبيهات</span><bdi id="alertsBadge" class="badge">0</bdi></div>
+      <div class="clock"><bdi id="clockTime" class="tech">--:--:--</bdi><span id="clockDate">—</span></div>
+      <div class="ticker" style="flex:0"><span id="appStatusDot" class="dot on"></span><span data-i18n="running">يعمل</span></div>
+    </footer>
+  </div>
+
+  <div id="modal" class="modal-bg hidden">
+    <div class="modal">
+      <h3 id="modalTitle"></h3>
+      <p id="modalMsg"></p>
+      <div class="modal-actions">
+        <button id="modalOk" class="btn primary" type="button">متابعة</button>
+        <button id="modalCancel" class="btn ghost" type="button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+  <div id="toasts" class="toasts"></div>
+
+  <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js"></script>
+  <script src="globe.js"></script>
+  <script src="radar.js"></script>
+  <script src="audio.js"></script>
+  <script src="terminal/terminal.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
