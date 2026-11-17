@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """فحص أجهزة الشبكة المحلية: arp-scan ثم nmap ثم ip neigh، مع دمج النتائج ورسائل عربية واضحة."""
+import ipaddress
 import os
 import re
 import shutil
@@ -8,9 +9,11 @@ import subprocess
 import time
 
 import psutil
+from privilege import elevate, NEED_ROOT_HINT, is_root
 from oui import vendor_of
 
 IS_WIN = os.name == "nt"
+_IFACE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,31}$")
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if IS_WIN else 0
 
 
@@ -56,7 +59,28 @@ def _merge(devices, item):
     devices.append(item)
 
 
+def _validate_inputs(interface, subnet):
+    """يمنع حقن وسائط في arp-scan/nmap (مثل واجهة تبدأ بـ - أو نطاق ضخم)."""
+    if interface:
+        interface = str(interface).strip()
+        if not _IFACE_RE.match(interface):
+            raise ValueError("اسم الواجهة غير صالح")
+    if subnet:
+        try:
+            net = ipaddress.ip_network(str(subnet).strip(), strict=False)
+        except ValueError:
+            raise ValueError("صيغة النطاق غير صالحة — مثال: 192.168.1.0/24")
+        if net.version != 4 or net.prefixlen < 20:
+            raise ValueError("النطاق كبير جدًا — استخدم IPv4 بقناع /20 أو أصغر")
+        subnet = str(net)
+    return interface or None, subnet or None
+
+
 def scan_devices(interface=None, subnet=None):
+    try:
+        interface, subnet = _validate_inputs(interface, subnet)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc), "devices": []}
     if IS_WIN:
         return _scan_windows()
     subnets = _local_subnets()
@@ -76,7 +100,8 @@ def scan_devices(interface=None, subnet=None):
 
     if shutil.which("arp-scan"):
         cmd = ["arp-scan", "--interface", iface, net] if interface else ["arp-scan", "--localnet"]
-        code, out, err = _run(cmd, timeout=25)
+        cmd, how = elevate(cmd)
+        code, out, err = _run(cmd, timeout=90 if how == "pkexec" else 25)
         if code == 0:
             methods.append("arp-scan")
             for line in out.splitlines():
@@ -85,12 +110,13 @@ def scan_devices(interface=None, subnet=None):
                     ip, mac, vendor = m.group(1), m.group(2).upper(), m.group(3).strip()
                     _merge(devices, {"ip": ip, "mac": mac, "vendor": vendor or vendor_of(mac), "name": _hostname(ip), "method": "arp-scan"})
         else:
-            note = "arp-scan يحتاج صلاحيات أعلى (sudo) — تم استخدام بدائل"
+            note = (NEED_ROOT_HINT + " — تم استخدام بدائل") if not is_root() else ("فشل arp-scan: %s" % (err or "").strip()[:120])
     else:
         note = "أداة arp-scan غير مثبتة"
 
     if shutil.which("nmap"):
-        code, out, err = _run(["nmap", "-sn", net], timeout=30)
+        ncmd, how = elevate(["nmap", "-sn", net])
+        code, out, err = _run(ncmd, timeout=90 if how == "pkexec" else 30)
         if code == 0:
             methods.append("nmap")
             current = {}

@@ -4,7 +4,9 @@
 
 def classify(evidence, sensitivity=5):
     sens = max(1, min(int(sensitivity), 10)) / 5.0
-    if not evidence.get("monitor_ok", True) or evidence.get("packets", 0) < 20:
+    # تنبيه صريح من Kismet أو ارتفاع في عدّاد الفصل يُصنَّف حتى لو الحزم قليلة
+    explicit = any(evidence.get(k) for k in ("deauth_flood", "disassoc_flood", "beacon_flood", "sec_change"))
+    if not explicit and (not evidence.get("monitor_ok", True) or evidence.get("packets", 0) < 20):
         return {
             "status": "unknown",
             "confidence": 0,

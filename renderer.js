@@ -5,7 +5,7 @@
   const $$ = s => Array.from(document.querySelectorAll(s));
   if (!api) { document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#dcebff;font-family:sans-serif">افتح التطبيق عبر الأمر npm start داخل Electron</div>'; return; }
 
-  const DEFAULT_SETTINGS = { theme: 'cyber', motion: 'full', language: 'ar', sound: true, volume: 0.6, typingSound: false, kismetUrl: 'http://localhost:2501', kismetApiKey: '', scanInterval: 5, sensitivity: 5, shell: 'default', fullscreen: false };
+  const DEFAULT_SETTINGS = { theme: 'cyber', motion: 'full', language: 'ar', sound: true, volume: 0.6, typingSound: false, kismetUrl: 'http://127.0.0.1:2501', kismetApiKey: '', scanInterval: 5, sensitivity: 5, shell: 'default', fullscreen: false };
   const VISUAL_DEFAULTS = { glow: 70, globeSpeed: 1, radarSpeed: 1, particles: 40 };
   const state = { settings: Object.assign({}, DEFAULT_SETTINGS), visual: Object.assign({}, VISUAL_DEFAULTS), lang: 'ar', snapshot: null, networks: [], deviceMap: new Map(), devices: [], deviceBaselineDone: false, trusted: new Set(), events: [], feed: [], activePage: 'dashboard', netFilter: 'all', netSort: { key: 'rssi', dir: -1 }, secFilter: 'all', unseen: 0, selectedBssid: null, adapters: [], wifiInfo: null, booted: false, backendRunning: false, sourceOk: false, activity: [], lastTs: 0, raf: 0, bootTimer: 0, deviceScanBusy: false, lastDeviceScan: 0, alertCooldown: new Map(), lastSavedToast: 0, termStatus: { count: 0, activeAlive: false, shell: null }, appInfo: null };
 
@@ -322,7 +322,7 @@
 
   function applySnapshot(s) {
     state.snapshot = s; state.networks = s.networks || [];
-    state.sourceOk = !!(s.source && s.source.ok);
+    state.sourceOk = !!(s.source && s.source.ok); state.sourceMsg = (s.source && s.source.message) || '';
     window.Radar.setNetworks(state.networks);
     if (state.selectedBssid && !state.networks.some(n => n.bssid === state.selectedBssid)) { state.selectedBssid = null; window.Radar.setSelected(null); }
     renderStats(); renderNetMini(); renderNetworks(); renderDefense(); updateSourceLabels();
@@ -337,6 +337,7 @@
     const ok = state.sourceOk;
     $('sourceDot').className = 'dot ' + (ok ? 'on' : 'off');
     $('sourceLabel').textContent = t(ok ? 'sourceOk' : 'sourceDown');
+    if ($('sourceLabel').parentElement) $('sourceLabel').parentElement.title = state.sourceMsg || '';
     $('radarStatusDot').className = 'dot ' + (ok ? 'on' : 'off');
     $('radarStatus').textContent = t(ok ? 'scanning' : 'waitingSource');
     $('globeStatusDot').className = 'dot ' + (ok ? 'on' : 'off');
@@ -654,7 +655,9 @@
         const last = state.alertCooldown.get(key) || 0;
         if (nowSec() - last > 60) { state.alertCooldown.set(key, nowSec()); addEvent(msg.data.level || 'critical', msg.data.message, msg.data.time); }
       } else if (msg.event === 'source_status') {
-        state.sourceOk = !!msg.data.ok; updateSourceLabels();
+        state.sourceOk = !!msg.data.ok; state.sourceMsg = msg.data.message || ''; updateSourceLabels();
+        // اعرض سبب فشل/عودة الاتصال بـ Kismet في سجل الأحداث (مرة واحدة عند كل تغيير)
+        if (msg.data.message) addEvent(msg.data.ok ? 'info' : 'warning', msg.data.message);
       } else if (msg.event === 'backend_error') addEvent('critical', msg.data.message);
       else if (msg.event === 'ready') addEvent('info', t('engineRunning'));
     });
@@ -666,7 +669,7 @@
     $('clockTime').textContent = new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
     $('clockDate').textContent = new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now);
   }
-  function tick(ts) { const dt = state.lastTs ? Math.min(0.1, (ts - state.lastTs) / 1000) : 0.016; state.lastTs = ts; window.Globe.draw(dt); window.Radar.draw(dt); state.raf = requestAnimationFrame(tick); }
+  function tick(ts) { const dt = state.lastTs ? Math.min(0.1, (ts - state.lastTs) / 1000) : 0.016; state.lastTs = ts; try { window.Globe.draw(dt); } catch (err) {} try { window.Radar.draw(dt); } catch (err) {} state.raf = requestAnimationFrame(tick); }
   function deviceAutoChecker() { if (state.booted && state.activePage === 'devices' && $('devAuto').checked && !state.deviceScanBusy && Date.now() - state.lastDeviceScan > Math.max(5000, state.settings.scanInterval * 1000)) scanDevices(); }
 
   const BOOT = [['boot1', 12], ['boot2', 30], ['boot3', 48], ['boot4', 66], ['boot5', 84], ['boot6', 100]];

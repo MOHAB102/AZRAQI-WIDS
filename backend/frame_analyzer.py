@@ -4,15 +4,21 @@ import os
 import re
 import shutil
 import subprocess
+
+from privilege import elevate, NEED_ROOT_HINT, is_root
 from collections import defaultdict
 
 IS_WIN = os.name == "nt"
+_IFACE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,31}$")
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if IS_WIN else 0
 
 
 def analyze_frames(interface, duration=5):
     if not interface:
         return {"ok": False, "error": "حدّد واجهة المراقبة أولًا (مثل wlan0mon)"}
+    interface = str(interface).strip()
+    if not _IFACE_RE.match(interface):
+        return {"ok": False, "error": "اسم الواجهة غير صالح"}
     if not shutil.which("tshark"):
         return {"ok": False, "error": "أداة TShark غير مثبتة — ثبّت حزمة tshark"}
     try:
@@ -25,15 +31,19 @@ def analyze_frames(interface, duration=5):
         "-T", "fields", "-e", "wlan.bssid", "-e", "wlan.fc.type_subtype",
         "-E", "separator=|",
     ]
+    cmd, how = elevate(cmd)
     try:
-        r = subprocess.run(cmd, capture_output=True, timeout=duration + 8,
+        r = subprocess.run(cmd, capture_output=True, timeout=duration + (60 if how == "pkexec" else 8),
                            creationflags=_NO_WINDOW, encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "انتهت مهلة التقاط الإطارات"}
     except OSError as exc:
         return {"ok": False, "error": "تعذر تشغيل TShark: %s" % exc}
     if r.returncode != 0:
-        return {"ok": False, "error": "فشل الالتقاط: %s" % (r.stderr or "").strip()[:300]}
+        err = (r.stderr or "").strip()
+        if not is_root() and ("permission" in err.lower() or "you don't have permission" in err.lower() or r.returncode in (126, 127)):
+            return {"ok": False, "error": "فشل الالتقاط: " + NEED_ROOT_HINT}
+        return {"ok": False, "error": "فشل الالتقاط: %s" % err[:300]}
 
     counts = defaultdict(lambda: {"deauth": 0, "disassoc": 0, "beacon": 0, "probe_req": 0, "probe_resp": 0, "total": 0})
     for line in (r.stdout or "").splitlines():

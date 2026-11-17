@@ -10,7 +10,8 @@
     "postinstall": "electron-rebuild -f -w node-pty",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux"
+    "dist:linux": "electron-builder --linux",
+    "start:root": "bash ./start-root.sh"
   },
   "author": "M AL-AZRAQI",
   "license": "MIT",
@@ -28,15 +29,37 @@
   "build": {
     "appId": "com.azraqi.wids",
     "productName": "AZRAQI WIDS",
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "files": [
-      "main.js", "preload.js", "index.html", "style.css",
-      "renderer.js", "globe.js", "radar.js", "audio.js",
-      "terminal/**/*", "backend/**/*", "assets/**/*",
-      "requirements.txt", "package.json"
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "renderer.js",
+      "globe.js",
+      "radar.js",
+      "audio.js",
+      "terminal/**/*",
+      "backend/**/*",
+      "assets/**/*",
+      "requirements.txt",
+      "package.json"
     ],
-    "win": { "target": ["nsis", "portable"] },
-    "linux": { "target": ["AppImage", "deb"], "category": "Utility" },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

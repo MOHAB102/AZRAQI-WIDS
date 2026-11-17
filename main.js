@@ -14,7 +14,7 @@ const THEMES = ['cyber', 'military', 'midnight', 'violet'];
 const DEFAULT_SETTINGS = {
   theme: 'cyber', motion: 'full', language: 'ar',
   sound: true, volume: 0.6, typingSound: false,
-  kismetUrl: 'http://localhost:2501', kismetApiKey: '',
+  kismetUrl: 'http://127.0.0.1:2501', kismetApiKey: '',
   scanInterval: 5, sensitivity: 5,
   shell: 'default', fullscreen: false
 };
@@ -23,6 +23,7 @@ let settings = Object.assign({}, DEFAULT_SETTINGS);
 let mainWindow = null;
 let reportsDir = null;
 let pythonCmd = null;
+let pythonMissing = null;
 
 function settingsFile() { return path.join(app.getPath('userData'), 'settings.json'); }
 function loadSettings() {
@@ -30,7 +31,7 @@ function loadSettings() {
   catch (err) { settings = Object.assign({}, DEFAULT_SETTINGS); }
 }
 function saveSettings() {
-  try { fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), 'utf8'); }
+  try { fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), { encoding: 'utf8', mode: 0o600 }); if (!IS_WIN) fs.chmodSync(settingsFile(), 0o600); }
   catch (err) { console.error('settings save:', err.message); }
 }
 function clampNumber(v, min, max, def) {
@@ -49,10 +50,14 @@ function sanitizeSettings(patch) {
   if (patch.volume !== undefined) out.volume = clampNumber(patch.volume, 0, 1, 0.6);
   if (patch.scanInterval !== undefined) out.scanInterval = Math.round(clampNumber(patch.scanInterval, 2, 60, 5));
   if (patch.sensitivity !== undefined) out.sensitivity = Math.round(clampNumber(patch.sensitivity, 1, 10, 5));
-  if (typeof patch.kismetUrl === 'string') out.kismetUrl = patch.kismetUrl.slice(0, 200);
-  if (typeof patch.kismetApiKey === 'string') out.kismetApiKey = patch.kismetApiKey.slice(0, 200);
+  if (typeof patch.kismetUrl === 'string') out.kismetUrl = patch.kismetUrl.trim().slice(0, 200);
+  if (typeof patch.kismetApiKey === 'string') out.kismetApiKey = patch.kismetApiKey.trim().slice(0, 4096);
   if (['default', 'powershell', 'cmd', 'bash', 'zsh'].indexOf(patch.shell) !== -1) out.shell = patch.shell;
   return out;
+}
+
+function isTrustedSender(event) {
+  return !!(mainWindow && event && event.sender === mainWindow.webContents && event.senderFrame && String(event.senderFrame.url || '').startsWith('file://'));
 }
 
 function detectPython() {
@@ -60,7 +65,13 @@ function detectPython() {
   for (const cmd of candidates) {
     try {
       const r = spawnSync(cmd, ['--version'], { windowsHide: true, timeout: 5000 });
-      if (r.status === 0) { pythonCmd = cmd; return; }
+      if (r.status === 0) {
+        pythonCmd = cmd;
+        // تأكد من وجود الحزم المطلوبة لتظهر رسالة واضحة بدل توقف المحرك بصمت
+        const m = spawnSync(cmd, ['-c', 'import psutil, requests'], { windowsHide: true, timeout: 8000, encoding: 'utf8' });
+        pythonMissing = m.status === 0 ? null : (String(m.stderr || '').trim().split('\n').pop() || 'psutil/requests');
+        return;
+      }
     } catch (err) {}
   }
   pythonCmd = null;
@@ -80,18 +91,19 @@ function backendStatus(running, message) {
 function startBackend() {
   if (backendStopping) return;
   if (!pythonCmd) { backendStatus(false, 'لم يتم العثور على Python 3 — ثبّته ثم أعد التشغيل'); return; }
+  if (pythonMissing) { backendStatus(false, 'حزم Python ناقصة (' + pythonMissing + ') — نفّذ: pip install -r requirements.txt'); return; }
   stdoutBuffer = '';
   const script = path.join(__dirname, 'backend', 'app.py');
+  // المفتاح لا يُمرَّر في سطر الأوامر (يظهر لكل المستخدمين في قائمة العمليات) بل عبر متغير بيئة
   const args = ['-u', script,
-    '--kismet-url', settings.kismetUrl,
-    '--api-key', settings.kismetApiKey,
-    '--interval', String(settings.scanInterval),
-    '--sensitivity', String(settings.sensitivity)
+    '--kismet-url=' + settings.kismetUrl,
+    '--interval=' + String(settings.scanInterval),
+    '--sensitivity=' + String(settings.sensitivity)
   ];
   try {
     backendProc = spawn(pythonCmd, args, {
       cwd: __dirname, windowsHide: true,
-      env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' })
+      env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', KISMET_API_KEY: settings.kismetApiKey || '', AZRAQI_KISMET_API_KEY: settings.kismetApiKey || '' })
     });
   } catch (err) { backendStatus(false, 'تعذر تشغيل محرك Python: ' + err.message); return; }
 
@@ -198,8 +210,9 @@ function registerIpc() {
     arch: os.arch(), version: app.getVersion(), python: pythonCmd,
     ptyAvailable: !!pty, ptyError: ptyLoadError
   }));
-  ipcMain.handle('settings:get', () => settings);
+  ipcMain.handle('settings:get', e => isTrustedSender(e) ? settings : {});
   ipcMain.handle('settings:set', (e, patch) => {
+    if (!isTrustedSender(e)) return {};
     const clean = sanitizeSettings(patch);
     settings = Object.assign({}, settings, clean);
     saveSettings();
@@ -209,15 +222,18 @@ function registerIpc() {
     if (clean.fullscreen !== undefined && mainWindow) mainWindow.setFullScreen(clean.fullscreen);
     return settings;
   });
-  ipcMain.handle('monitor:request', (e, cmd, payload) => backendRequest(String(cmd), payload, 45000));
+  ipcMain.handle('monitor:request', (e, cmd, payload) => isTrustedSender(e) ? backendRequest(String(cmd), payload, 45000) : { ok: false, error: 'مصدر الطلب غير موثوق' });
   ipcMain.handle('monitor:status-get', () => ({ running: backendReady, message: backendReady ? 'محرك الرصد يعمل' : 'محرك الرصد غير متاح' }));
-  ipcMain.handle('monitor:restart', () => {
+  ipcMain.handle('monitor:restart', e => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'مصدر الطلب غير موثوق' };
     restartAttempts = 0; backendStopping = false;
+    detectPython();
     if (backendProc) { try { backendProc.kill(); } catch (err) { startBackend(); } } else startBackend();
     return { ok: true };
   });
 
   ipcMain.handle('terminal:create', (e, opts) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'مصدر الطلب غير موثوق' };
     opts = opts || {};
     if (!pty) return { ok: false, error: 'مكوّن node-pty غير جاهز — نفّذ: npm run rebuild' };
     if (ptySessions.size >= MAX_SESSIONS) return { ok: false, error: 'الحد الأقصى للجلسات (' + MAX_SESSIONS + ')' };
@@ -236,21 +252,23 @@ function registerIpc() {
       return { ok: true, id, shell: shell.label };
     } catch (err) { return { ok: false, error: 'تعذر تشغيل الطرفية: ' + err.message }; }
   });
-  ipcMain.on('terminal:input', (e, msg) => { const p = ptySessions.get(msg && msg.id); if (p && typeof msg.data === 'string') p.write(msg.data); });
+  ipcMain.on('terminal:input', (e, msg) => { if (!isTrustedSender(e)) return; const p = ptySessions.get(msg && msg.id); if (p && typeof msg.data === 'string' && msg.data.length <= 65536) p.write(msg.data); });
   ipcMain.on('terminal:resize', (e, msg) => {
+    if (!isTrustedSender(e)) return;
     const p = ptySessions.get(msg && msg.id); if (!p) return;
     try { p.resize(Math.round(clampNumber(msg.cols, 2, 500, 80)), Math.round(clampNumber(msg.rows, 2, 200, 24))); } catch (err) {}
   });
-  ipcMain.handle('terminal:close', (e, id) => { const p = ptySessions.get(id); if (p) { try { p.kill(); } catch (err) {} ptySessions.delete(id); } return { ok: true }; });
+  ipcMain.handle('terminal:close', (e, id) => { if (!isTrustedSender(e)) return { ok: false }; const p = ptySessions.get(id); if (p) { try { p.kill(); } catch (err) {} ptySessions.delete(id); } return { ok: true }; });
 
-  ipcMain.on('window:minimize', () => { if (mainWindow) mainWindow.minimize(); });
-  ipcMain.on('window:toggle-maximize', () => { if (!mainWindow) return; if (mainWindow.isMaximized()) mainWindow.unmaximize(); else mainWindow.maximize(); });
-  ipcMain.on('window:close', () => { if (mainWindow) mainWindow.close(); });
-  ipcMain.handle('window:toggle-fullscreen', () => { if (!mainWindow) return false; mainWindow.setFullScreen(!mainWindow.isFullScreen()); return mainWindow.isFullScreen(); });
-  ipcMain.handle('clipboard:read', () => clipboard.readText());
-  ipcMain.handle('clipboard:write', (e, text) => { clipboard.writeText(String(text || '')); return true; });
+  ipcMain.on('window:minimize', e => { if (isTrustedSender(e) && mainWindow) mainWindow.minimize(); });
+  ipcMain.on('window:toggle-maximize', e => { if (!isTrustedSender(e) || !mainWindow) return; if (mainWindow.isMaximized()) mainWindow.unmaximize(); else mainWindow.maximize(); });
+  ipcMain.on('window:close', e => { if (isTrustedSender(e) && mainWindow) mainWindow.close(); });
+  ipcMain.handle('window:toggle-fullscreen', e => { if (!isTrustedSender(e) || !mainWindow) return false; mainWindow.setFullScreen(!mainWindow.isFullScreen()); return mainWindow.isFullScreen(); });
+  ipcMain.handle('clipboard:read', e => isTrustedSender(e) ? clipboard.readText() : '');
+  ipcMain.handle('clipboard:write', (e, text) => { if (!isTrustedSender(e)) return false; clipboard.writeText(String(text || '').slice(0, 1000000)); return true; });
 
   ipcMain.handle('report:save', async (e, opts) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'مصدر الطلب غير موثوق' };
     opts = opts || {};
     const format = ['json', 'csv', 'txt'].indexOf(opts.format) !== -1 ? opts.format : 'json';
     const content = typeof opts.content === 'string' ? opts.content : '';
@@ -268,7 +286,7 @@ function registerIpc() {
 
 function main() {
   loadSettings(); detectPython();
-  reportsDir = path.join(__dirname, 'reports');
+  reportsDir = app.isPackaged ? path.join(app.getPath('documents'), 'AZRAQI-WIDS-reports') : path.join(__dirname, 'reports');
   try { fs.mkdirSync(reportsDir, { recursive: true }); } catch (err) {}
   Menu.setApplicationMenu(null);
   registerIpc(); createWindow(); startBackend();

@@ -2,14 +2,24 @@ window.Radar = (function () {
   'use strict';
   let canvas = null, networks = [], selected = null, speed = 1, motion = 'full', sweep = 0, particles = [], particleCount = 40, onSelect = null;
   function cssVar(n, d) { const v = getComputedStyle(document.body).getPropertyValue(n).trim(); return v || d; }
-  function rgba(hex, a) { const m = /^#?([0-9a-f]{6})$/i.exec(hex); if (!m) return 'rgba(0,229,255,' + a + ')'; const x = parseInt(m[1], 16); return 'rgba(' + ((x >> 16) & 255) + ',' + ((x >> 8) & 255) + ',' + (x & 255) + ',' + a + ')'; }
+  function rgba(c, a) {
+    c = String(c || '').trim(); let m = /^#?([0-9a-f]{6})$/i.exec(c);
+    if (!m) { const s3 = /^#([0-9a-f]{3})$/i.exec(c); if (s3) m = [null, s3[1].split('').map(ch => ch + ch).join('')]; }
+    if (m) { const x = parseInt(m[1], 16); return 'rgba(' + ((x >> 16) & 255) + ',' + ((x >> 8) & 255) + ',' + (x & 255) + ',' + a + ')'; }
+    const r = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(c);
+    if (r) return 'rgba(' + r[1] + ',' + r[2] + ',' + r[3] + ',' + a + ')';
+    return 'rgba(0,229,255,' + a + ')';
+  }
   function fit() {
     const r = canvas.getBoundingClientRect(); if (r.width < 4 || r.height < 4) return null;
     const d = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width), h = Math.round(r.height);
     if (canvas.width !== Math.round(w * d) || canvas.height !== Math.round(h * d)) { canvas.width = Math.round(w * d); canvas.height = Math.round(h * d); }
     const x = canvas.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); return { x, w, h };
   }
-  function hashAngle(bssid) { let h = 0; const s = String(bssid || ''); for (let i = 0; i < s.length; i++) h = ((h * 31) + s.charCodeAt(i)) >>> 0; return (h % 360) * Math.PI / 180; }
+  // توزيع منتظم: خلط جيد للبتات (MACs المتتالية كانت تعطي زوايا متقاربة فتتكدس النقاط)
+  function hash32(str) { let h = 2166136261 >>> 0; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } h ^= h >>> 15; h = Math.imul(h, 2246822507) >>> 0; h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0; h ^= h >>> 16; return h >>> 0; }
+  function hashAngle(bssid) { return (hash32(String(bssid || '')) % 3600) / 3600 * Math.PI * 2; }
+  function hashJitter(bssid) { return (hash32('r' + String(bssid || '')) % 1000) / 1000; }
   function init(c, opts) {
     canvas = c; onSelect = opts && opts.onSelect;
     canvas.addEventListener('click', function (e) {
@@ -43,16 +53,25 @@ window.Radar = (function () {
     const colors = { green: cssVar('--green', '#3dff8b'), yellow: cssVar('--amber', '#ff9d42'), red: cssVar('--red', '#ff3864'), unknown: cssVar('--muted', '#7e93b8') };
     const glow = parseFloat(getComputedStyle(document.body).getPropertyValue('--glow')) || 0.7;
     const now = performance.now();
-    networks.forEach(n => {
-      const rssi = Number(n.rssi); const dist = isNaN(rssi) ? 0.5 : Math.max(0, Math.min(1, (rssi + 90) / 60));
-      const r = (1 - dist) * R * 0.85 + R * 0.08, angle = hashAngle(n.bssid);
+    // مقياس تكيّفي: إذا كانت قيم RSSI خارج النطاق المعتاد أو متقاربة جدًا (فتتكدس النقاط في المنتصف)
+    // نوزّعها نسبيًا بين أضعف وأقوى إشارة موجودة
+    const vals = networks.map(n => (n.rssi === null || n.rssi === undefined || n.rssi === '') ? NaN : Number(n.rssi)).filter(v => !isNaN(v));
+    const vMin = vals.length ? Math.min.apply(null, vals) : 0, vMax = vals.length ? Math.max.apply(null, vals) : 0;
+    const absOk = vals.length > 0 && vMin >= -100 && vMax <= -20 && (vMax - vMin) >= 15;
+    const lo = vMin - 2, span = Math.max(8, vMax - vMin + 4);
+    networks.forEach(n => { try {
+      const rssi = (n.rssi === null || n.rssi === undefined || n.rssi === '') ? NaN : Number(n.rssi);
+      // بدون RSSI: نضع النقطة في حلقة وسطى بنصف قطر موزّع حتى لا تتراكم فوق بعضها
+      let dist = isNaN(rssi) ? 0.2 + 0.3 * hashJitter(n.bssid) : (absOk ? Math.max(0, Math.min(1, (rssi + 90) / 60)) : Math.max(0, Math.min(1, (rssi - lo) / span)));
+      dist = Math.max(0, Math.min(1, dist + (hashJitter(n.bssid) - 0.5) * 0.08));   // فصل بسيط للنقاط المتساوية
+      const r = (1 - dist) * R * 0.8 + R * 0.12, angle = hashAngle(n.bssid);
       const px = cx + Math.cos(angle) * r, py = cy + Math.sin(angle) * r; n._x = px; n._y = py;
       const col = colors[n.status] || colors.unknown, pulse = n.status === 'red' ? (0.6 + 0.4 * Math.sin(now / 200)) : 1;
       x.fillStyle = rgba(col, 0.9 * pulse); x.shadowColor = col; x.shadowBlur = 10 * glow;
       x.beginPath(); x.arc(px, py, n.bssid === selected ? 5 : 3.5, 0, Math.PI * 2); x.fill(); x.shadowBlur = 0;
       if (n.status !== 'green') { x.strokeStyle = rgba(col, 0.4 * pulse); x.beginPath(); x.arc(px, py, 6 + (1 - pulse) * 8, 0, Math.PI * 2); x.stroke(); }
       if (n.bssid === selected) { x.strokeStyle = rgba(ac, 0.8); x.lineWidth = 1; x.beginPath(); x.arc(px, py, 9, 0, Math.PI * 2); x.stroke(); x.fillStyle = rgba('#dcebff', 0.9); x.font = '10px ' + cssVar('--font', 'sans-serif'); x.fillText(String(n.ssid || n.bssid), px + 11, py - 6); }
-    });
+    } catch (err) { /* نقطة واحدة معطوبة لا توقف الرادار */ } });
     x.fillStyle = ac; x.beginPath(); x.arc(cx, cy, 3, 0, Math.PI * 2); x.fill();
   }
   return { init, setNetworks, setSelected, setSpeed, setParticles, setMotion, draw };
